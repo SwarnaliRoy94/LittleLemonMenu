@@ -63,38 +63,34 @@ export function saveMenuItems(menuItems) {
  *
  */
 export async function filterByQueryAndCategories(query, activeCategories) {
-  const q = (query ?? "").trim();
+  // using '%' wildcard for partial matching.
+  const searchText = query ? `%${query.toLowerCase()}%` : "%%";
 
+  // Determine if a category filter is active
+  const hasCategoryFilter =
+    Array.isArray(activeCategories) && activeCategories.length > 0;
+
+  // Start with the basic query components
+  let sqlQuery = `SELECT * FROM menuitems WHERE title LIKE ?`;
+  let sqlParams = [searchText];
+
+  // If category filter is active, append it to the query
+  if (hasCategoryFilter) {
+    sqlQuery += ` AND category IN (${activeCategories
+      .map(() => "?")
+      .join(", ")})`;
+    sqlParams = sqlParams.concat(activeCategories);
+  }
+
+  // Execute the transaction and return the results directly
   return new Promise((resolve, reject) => {
     db.transaction((tx) => {
-      const where = [];
-      const params = [];
-
-      // 1) Title substring match (case-insensitive)
-      if (q.length > 0) {
-        where.push("LOWER(title) LIKE ?");
-        params.push(`%${q.toLowerCase()}%`);
-      }
-
-      // 2) Category filter (IN list)
-      if (Array.isArray(activeCategories) && activeCategories.length > 0) {
-        const placeholders = activeCategories.map(() => "?").join(", ");
-        where.push(`category IN (${placeholders})`);
-        params.push(...activeCategories);
-      }
-
-      const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
-      const sql = `
-        SELECT * FROM menuitems
-        ${whereClause}
-        ORDER BY category, title;
-      `;
-
       tx.executeSql(
-        sql,
-        params,
-        (_, { rows }) => resolve(rows._array),
+        sqlQuery,
+        sqlParams,
+        (_, { rows }) => {
+          resolve(rows._array);
+        },
         (_, error) => {
           reject(error);
           return true;

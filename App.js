@@ -39,9 +39,7 @@ export default function App() {
   );
 
   const fetchData = async () => {
-    const res = await fetch(
-      API_URL
-    );
+    const res = await fetch(API_URL);
     const json = await res.json();
 
     // flatten category object -> string
